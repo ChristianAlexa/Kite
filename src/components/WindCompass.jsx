@@ -54,35 +54,45 @@ export default function WindCompass({ hour }) {
               </div>
               <div className="text-xs text-slate-500">gusts {Math.round(gust)} mph</div>
               <Steadiness segments={segments} colorText={colorText} />
-              <CompassControl status={status} request={request} />
             </>
           )}
         </div>
       </div>
 
+      {!calm && <CompassControl status={status} request={request} />}
       {!calm && <Guidance live={live} aligned={aligned} heading={heading} target={target} stance={stance} />}
     </div>
   )
 }
 
-// The opt-in button (and its denied/live states) under the wind stats.
+// The opt-in control under the wind stats. Pre-grant it's a full-width primary
+// CTA so the live-compass feature is easy to find; afterward it shrinks to a
+// quiet status line.
 function CompassControl({ status, request }) {
   if (status === 'unsupported') return null
   if (status === 'granted') {
-    return <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-wide text-kite-good">● Live compass</div>
+    return (
+      <div className="mt-2 flex items-center justify-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-kite-good">
+        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-kite-good" />
+        Live compass on
+      </div>
+    )
   }
   if (status === 'denied') {
     return (
-      <div className="mt-1.5 text-[10px] text-slate-400">Compass blocked — enable motion access in settings</div>
+      <div className="mt-2 text-center text-[11px] text-slate-400">
+        Compass blocked — enable motion access in settings
+      </div>
     )
   }
   return (
     <button
       type="button"
       onClick={request}
-      className="mt-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600 active:bg-slate-200"
+      className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-500 px-4 py-3 text-sm font-bold text-white shadow-md shadow-sky-500/30 transition active:scale-[0.98] active:bg-sky-600"
     >
-      🧭 Align with compass
+      <span className="text-lg leading-none" aria-hidden>🧭</span>
+      Align with compass
     </button>
   )
 }
