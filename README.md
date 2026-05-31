@@ -1,5 +1,7 @@
 # 🪁 Kite — "When can I fly?"
 
+**▶︎ Live: https://christianalexa.github.io/Kite/**
+
 A small installable PWA that tells casual kite flyers **when the wind is actually
 good**. It pulls the local hourly forecast, scores every daytime hour 0–100 for
 kite-flying quality, and surfaces the next good window in plain language — e.g.
