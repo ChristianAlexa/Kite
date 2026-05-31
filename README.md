@@ -1,80 +1,43 @@
 # 🪁 Kite — "When can I fly?"
 
-A small installable web app that answers one question for casual kite flyers:
-**when is the wind actually good?**
-
-Most weather apps show you raw wind, gust, and rain numbers and leave you to
-interpret them. Kite does the interpreting. It pulls the local hourly forecast,
-scores every daytime hour 0–100 for kite-flying quality, and surfaces the next
-good window in plain language — e.g. _"Excellent conditions Tuesday 3–6 PM."_
+A small installable PWA that tells casual kite flyers **when the wind is actually
+good**. It pulls the local hourly forecast, scores every daytime hour 0–100 for
+kite-flying quality, and surfaces the next good window in plain language — e.g.
+_"Excellent conditions Tuesday 3–6 PM"_ — plus a tap-to-drill 7-day heatmap.
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Kite — headline window and 7-day kite-flying heatmap" width="320" />
 </p>
 
-## What it shows
-
-- **Headline** — the next Good+ window as a sentence, with its peak score. No
-  good window in the next 7 days? It tells you the week's best hour instead.
-- **Upcoming windows** — every Good+ stretch as a card: day, time range, average
-  score, and wind / gust / rain summary.
-- **7-day heatmap** — a color grid of daylight hours (deep green Excellent → red
-  Poor). Tap any cell for that hour's wind direction, gust, rain, and temp.
-
-## How it scores
-
-Each daytime hour is a weighted sum of four sub-scores — wind speed (0.45), gust
-steadiness (0.35), precipitation (0.15), and comfort temp (0.05) — with hard
-gates that force calm, soaked, or turbulent hours into the Poor band regardless
-of the rest. Gustiness is judged on both absolute spread _and_ gust factor
-(gust ÷ sustained), and the worse of the two wins. The full model lives in
-[`src/lib/scoring.js`](src/lib/scoring.js); the design notes are in
-[`docs/SPEC.md`](docs/SPEC.md).
-
-It's tuned for a beginner-friendly profile (ideal 8–16 mph). No user tuning in
-v1 — change `WEIGHTS` / `THRESHOLDS` and everything else follows.
-
-## Tech
-
-React + Vite + Tailwind, deployed as a static PWA — no backend, no accounts, no
-API keys. Weather comes from the free, CORS-enabled
-[Open-Meteo](https://open-meteo.com/) API directly from the browser.
-
-## Run it locally
+## Run
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
-```
-
-Other scripts:
-
-```bash
-npm test           # Vitest — scoring, windows, weather, calendar (63 tests)
-npm run build      # production bundle + service worker into dist/
-npm run preview    # serve the production build
-npm run lint       # ESLint
-npm run format     # Prettier (write)
+npm run dev        # http://localhost:5173
+npm test           # Vitest (66 tests)
+npm run build      # static bundle → dist/
 ```
 
 ## Deploy
 
-Static — any host works. Build with `npm run build` and serve `dist/`. On
-Vercel or Netlify, point the project at this repo with build command
-`npm run build` and output directory `dist`; their default Node build handles
-the rest.
+Static, no backend. On Vercel/Netlify: build `npm run build`, output `dist/`.
 
-## Privacy
+## How it scores
 
-Kite stores your last location in `localStorage` and talks only to Open-Meteo.
-No analytics, no tracking, no account. See [PRIVACY.md](PRIVACY.md).
+Weighted sum of wind (0.45), gust steadiness (0.35), precip (0.15), and temp
+(0.05), with hard gates that drop calm, wet, or turbulent hours to Poor. Full
+model in [`src/lib/scoring.js`](src/lib/scoring.js); design notes in
+[`docs/SPEC.md`](docs/SPEC.md).
 
-## Security note
+## Stack & privacy
 
-`npm audit` reports moderate advisories in the **dev-only** esbuild/Vite
-toolchain (the dev server, not the shipped bundle). They do not affect the
-static production build that users load. Tracked for resolution when Vite's
-toolchain ships a non-breaking patch.
+React + Vite + Tailwind. Weather from the free, keyless
+[Open-Meteo](https://open-meteo.com/) API, called straight from the browser. Last
+location is kept in `localStorage`; no accounts, no analytics, no tracking
+([PRIVACY.md](PRIVACY.md)).
+
+> `npm audit` shows moderate advisories in the dev-only Vite/esbuild toolchain —
+> not in the shipped bundle.
 
 ## License
 

@@ -31,4 +31,9 @@ export default [
     files: ['**/*.test.js', '**/__tests__/**'],
     languageOptions: { globals: { ...globals.node } },
   },
+  {
+    // Build/tooling configs run in Node.
+    files: ['*.config.js', 'vite.config.js'],
+    languageOptions: { globals: { ...globals.node } },
+  },
 ]

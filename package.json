@@ -2,6 +2,9 @@
   "name": "kite",
   "version": "1.0.0",
   "private": true,
+  "description": "When can I fly? — a kite-flying weather-window scorer PWA.",
+  "author": "Christian Alexa",
+  "repository": "github:ChristianAlexa/Kite",
   "license": "MIT",
   "type": "module",
   "scripts": {
