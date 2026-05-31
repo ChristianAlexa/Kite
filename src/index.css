@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Kill the grey/blue flash box iOS Safari paints over tapped controls. */
+button,
+a,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  /* No rubber-band bounce revealing the page edge over the sky. */
+  overscroll-behavior-y: none;
+  /* Soft Animal-Crossing sky: pastel blue with chunky white clouds, gently
+     tiled. Two staggered clouds per 150px tile keep it from feeling gridded. */
+  background-color: #cdeafd;
+  background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 150 150'><g fill='%23ffffff'><g opacity='0.55'><ellipse cx='45' cy='58' rx='26' ry='15'/><circle cx='32' cy='52' r='12'/><circle cx='50' cy='46' r='16'/><circle cx='65' cy='54' r='11'/></g><g opacity='0.4' transform='translate(92,92) scale(0.62)'><ellipse cx='45' cy='58' rx='26' ry='15'/><circle cx='32' cy='52' r='12'/><circle cx='50' cy='46' r='16'/><circle cx='65' cy='54' r='11'/></g></g></svg>");
+  background-size: 150px 150px;
+  -webkit-font-smoothing: antialiased;
+  /* Clouds drift slowly sideways. One full tile (150px) per loop = seamless. */
+  animation: sky-drift 20s linear infinite;
+}
+@keyframes sky-drift {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 150px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body {
+    animation: none;
+  }
+}
+
+/* Wind-compass arrow jitter — applied only when the hour is gusty, so a steady
+   wind reads as a still arrow and a gusty one visibly twitches. */
+@keyframes wind-jitter {
+  0%,
+  100% {
+    transform: rotate(-2.5deg);
+  }
+  50% {
+    transform: rotate(2.5deg);
+  }
+}
+.animate-wind-jitter {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wind-jitter 0.45s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-wind-jitter {
+    animation: none;
+  }
+}
+
+/* Perfect (score 100) tile — the ideal flying hour. Steady wind streaks drift
+   smoothly across the green so it reads as "perfect breeze," marked by motion
+   rather than a special color. Slow + gentle, the calm counterpart to the
+   blown-out tile's fast, harsh streaks. */
+.ideal-tile {
+  background-color: #ffffff;
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent 0 7px,
+    rgba(16, 163, 74, 0.22) 7px 10px /* faint green streaks on white */
+  );
+  background-size: 14.142px 14.142px; /* 10px * sqrt(2) — seamless loop */
+  animation: ideal-flow 1.8s linear infinite;
+}
+@keyframes ideal-flow {
+  to {
+    background-position: 14.142px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ideal-tile {
+    animation: none;
+  }
+}
+
+/* Blown-out (wind >= strong) tile — already red/Poor. Fast diagonal streaks
+   blow across to read as dangerously windy. Seamless loop: 45deg stripes with a
+   sqrt(2)-scaled tile, shifted one whole tile per cycle. */
+.windy-tile {
+  background-color: #dc2626; /* kite-poor */
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent 0 4px,
+    rgba(255, 255, 255, 0.4) 4px 8px
+  );
+  background-size: 11.314px 11.314px; /* 8px * sqrt(2) */
+  animation: windy-streaks 0.6s linear infinite;
+}
+@keyframes windy-streaks {
+  to {
+    background-position: 11.314px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .windy-tile {
+    animation: none;
+  }
+}
+
+/* Hide scrollbar on the hourly strip while keeping it scrollable. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
