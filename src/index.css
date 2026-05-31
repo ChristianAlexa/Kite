@@ -68,6 +68,39 @@ body {
   }
 }
 
+/* Live-compass rose. Headings arrive already smoothed, but a short transition
+   glides between updates so the rose turns rather than snaps. */
+.compass-rose {
+  transition: transform 120ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .compass-rose {
+    transition: none;
+  }
+}
+
+/* Aligned (wind at your back) — a soft, steady pulse confirms the lock while the
+   ring + lubber mark are green. */
+.compass-locked {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: compass-pulse 1.1s ease-in-out infinite;
+}
+@keyframes compass-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .compass-locked {
+    animation: none;
+  }
+}
+
 /* Perfect (score 100) tile — the ideal flying hour. Steady wind streaks drift
    smoothly across the green so it reads as "perfect breeze," marked by motion
    rather than a special color. Slow + gentle, the calm counterpart to the
