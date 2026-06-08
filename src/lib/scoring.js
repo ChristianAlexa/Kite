@@ -9,8 +9,12 @@ export const WEIGHTS = {
 }
 
 export const THRESHOLDS = {
-  // Wind speed (mph) beginner band.
-  wind: { dead: 3, idealLow: 8, idealHigh: 16, strong: 25, highScoreFloor: 40 },
+  // Wind speed (mph) beginner band. The score peaks across the reliable launch
+  // window (idealLow–idealHigh); below it, wind earns only partial credit so a
+  // light-but-flyable hour can't read Excellent. `flyable` is the floor where a
+  // kite reliably gets airborne — wind at that speed scores exactly the Marginal
+  // band minimum (40). `strong` is the beginner blow-out ceiling → 0.
+  wind: { dead: 4, flyable: 9, idealLow: 14, idealHigh: 20, strong: 28 },
   // Gust steadiness. Two views: absolute spread (gust - sustained, mph) and the
   // gust factor (gust / sustained, ratio) — the metric a pilot actually reads off
   // a windmeter. We score on whichever looks worse.
@@ -56,11 +60,17 @@ const ramp = (x, x0, y0, x1, y1) => {
 // --- Sub-scores (each 0–100) ---
 
 export function windScore(windSpeed) {
-  const { dead, idealLow, idealHigh, strong, highScoreFloor } = THRESHOLDS.wind
+  const { dead, flyable, idealLow, idealHigh, strong } = THRESHOLDS.wind
+  const marginalFloor = LABELS.marginal.min // wind that's just-flyable reads Marginal
   if (windSpeed < dead) return 0
-  if (windSpeed < idealLow) return clamp(ramp(windSpeed, dead, 0, idealLow, 100))
+  // dead → flyable: rises into the Marginal band (a kite barely gets up).
+  if (windSpeed < flyable) return clamp(ramp(windSpeed, dead, 0, flyable, marginalFloor))
+  // flyable → idealLow: climbs to the reliable peak.
+  if (windSpeed < idealLow) return clamp(ramp(windSpeed, flyable, marginalFloor, idealLow, 100))
+  // idealLow → idealHigh: reliable launch window, full marks.
   if (windSpeed <= idealHigh) return 100
-  if (windSpeed <= strong) return clamp(ramp(windSpeed, idealHigh, 100, strong, highScoreFloor))
+  // idealHigh → strong: ramps back to 0 as it blows out.
+  if (windSpeed <= strong) return clamp(ramp(windSpeed, idealHigh, 100, strong, 0))
   return 0 // too strong
 }
 
@@ -116,7 +126,7 @@ export function labelFor(score) {
   return LABELS.poor.name
 }
 
-// Score one normalized hour → { score, label, parts }.
+// Score one normalized hour → { score, label, parts, gated, gustFactor, limiter }.
 export function scoreHour(hour) {
   const parts = {
     wind: windScore(hour.windSpeed),
@@ -130,6 +140,12 @@ export function scoreHour(hour) {
       parts.precip * WEIGHTS.precip +
       parts.temp * WEIGHTS.temp
   )
+
+  // Wind is the ceiling, not just a 45% term. No amount of sun, dry air, and
+  // steadiness makes a too-light day flyable — the headline can't exceed the
+  // wind sub-score. This is what stops a calm, clear, mild hour reading 100.
+  // Round the (float) sub-score so the cap keeps the headline an integer.
+  score = Math.min(score, Math.round(parts.wind))
 
   const { dead, turbGF, gustyGF, absStrong } = THRESHOLDS.gust
   const spread = Math.max(0, hour.gust - hour.windSpeed)
@@ -147,5 +163,35 @@ export function scoreHour(hour) {
   // flyable) hour caps at Good, never Excellent.
   if (!gated && gustFactor >= gustyGF) score = Math.min(score, LABELS.good.min + 19) // 79
 
-  return { score, label: labelFor(score), parts, gated, gustFactor }
+  const result = { score, label: labelFor(score), parts, gated, gustFactor }
+  result.limiter = limiterFor(hour, result)
+  return result
+}
+
+// Plain-language reason the score isn't higher — the weakest link. Returns null
+// when nothing is meaningfully holding it back (a genuinely clean hour). Pure;
+// reads only the hour inputs and an already-scored result, so it's reusable on
+// any scored hour (heatmap, live reading, consolation pick).
+export function limiterFor(hour, result) {
+  const { windSpeed, gust, precip, precipProb } = hour
+  const W = THRESHOLDS.wind
+
+  // Gated hours: name the specific disqualifier, most fundamental first.
+  if (result.gated) {
+    if (windSpeed < W.dead) return 'Wind too calm'
+    if (windSpeed > W.strong) return 'Wind too strong'
+    if (precip > 0 || precipProb >= THRESHOLDS.precip.probHigh) return 'Rain likely'
+    if (gust > THRESHOLDS.gust.absStrong) return 'Gusts too strong'
+    return 'Too gusty'
+  }
+
+  // Ungated: surface the lowest sub-score, but only if it's actually dragging
+  // the headline down — above ~85 there's no caveat worth showing.
+  const { wind, gust: gustPart, precip: precipPart, temp } = result.parts
+  const min = Math.min(wind, gustPart, precipPart, temp)
+  if (min >= 85) return null
+  if (wind === min) return windSpeed < W.idealLow ? 'Wind a touch light' : 'Wind on the strong side'
+  if (gustPart === min) return 'A bit gusty'
+  if (precipPart === min) return 'Slight rain chance'
+  return temp < THRESHOLDS.temp.coolGood ? 'On the chilly side' : 'On the warm side'
 }

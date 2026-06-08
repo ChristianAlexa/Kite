@@ -57,8 +57,8 @@ describe('steadinessSegments', () => {
 
 describe('isCalm', () => {
   it('is true below the dead-wind threshold', () => {
-    expect(isCalm(2)).toBe(true)
-    expect(isCalm(3)).toBe(false)
+    expect(isCalm(3)).toBe(true)
+    expect(isCalm(4)).toBe(false)
     expect(isCalm(12)).toBe(false)
   })
 })

@@ -1,11 +1,19 @@
 import { describe, it, expect } from 'vitest'
-import { scoreHour, windScore, gustScore, precipScore, tempScore, labelFor } from '../scoring.js'
+import {
+  scoreHour,
+  windScore,
+  gustScore,
+  precipScore,
+  tempScore,
+  labelFor,
+  limiterFor,
+} from '../scoring.js'
 
 // Helper: a benign baseline daytime hour we mutate per-test.
 const hour = (over = {}) => ({
   time: '2026-05-30T14:00',
-  windSpeed: 12,
-  gust: 14,
+  windSpeed: 16,
+  gust: 18,
   precip: 0,
   precipProb: 0,
   temp: 70,
@@ -15,22 +23,30 @@ const hour = (over = {}) => ({
 
 describe('windScore', () => {
   it('dead calm scores 0', () => expect(windScore(2)).toBe(0))
-  it('ideal band (8–16) scores 100', () => {
-    expect(windScore(8)).toBe(100)
-    expect(windScore(12)).toBe(100)
-    expect(windScore(16)).toBe(100)
+  it('reliable band (14–20) scores 100', () => {
+    expect(windScore(14)).toBe(100)
+    expect(windScore(17)).toBe(100)
+    expect(windScore(20)).toBe(100)
   })
-  it('ramps up between dead and ideal', () => {
-    expect(windScore(3)).toBe(0)
-    expect(windScore(5.5)).toBeGreaterThan(40)
-    expect(windScore(5.5)).toBeLessThan(60)
+  it('just-flyable wind reads only Marginal, not full marks', () => {
+    expect(windScore(9)).toBe(40) // flyable floor = Marginal band minimum
+    expect(windScore(8)).toBeGreaterThan(0)
+    expect(windScore(8)).toBeLessThan(40)
   })
-  it('ramps down to floor between ideal and strong', () => {
-    expect(windScore(25)).toBeCloseTo(40, 0)
-    expect(windScore(20)).toBeLessThan(100)
-    expect(windScore(20)).toBeGreaterThan(40)
+  it('light-but-present wind earns partial credit, never 100', () => {
+    expect(windScore(11)).toBeGreaterThan(55) // ~64 — flyable, not prime
+    expect(windScore(11)).toBeLessThan(75)
   })
-  it('too strong scores 0', () => expect(windScore(30)).toBe(0))
+  it('ramps up below the reliable band', () => {
+    expect(windScore(4)).toBe(0)
+    expect(windScore(13)).toBeGreaterThan(80)
+    expect(windScore(13)).toBeLessThan(100)
+  })
+  it('ramps down to 0 between ideal and blow-out', () => {
+    expect(windScore(24)).toBeLessThan(100)
+    expect(windScore(24)).toBeGreaterThan(0)
+  })
+  it('too strong scores 0', () => expect(windScore(28)).toBe(0))
 })
 
 describe('gustScore', () => {
@@ -73,11 +89,55 @@ describe('labelFor', () => {
   })
 })
 
+describe('limiterFor (via scoreHour.limiter)', () => {
+  const lim = (over) => scoreHour(hour(over)).limiter
+
+  it('light-but-flyable wind → "Wind a touch light"', () => {
+    expect(lim({ windSpeed: 11, gust: 13 })).toBe('Wind a touch light')
+  })
+  it('clean reliable wind → no caveat', () => {
+    expect(lim({ windSpeed: 16, gust: 18, temp: 70, precipProb: 0 })).toBeNull()
+  })
+  it('dead calm → "Wind too calm"', () => {
+    expect(lim({ windSpeed: 1, gust: 2 })).toBe('Wind too calm')
+  })
+  it('gale → "Wind too strong"', () => {
+    expect(lim({ windSpeed: 30, gust: 38 })).toBe('Wind too strong')
+  })
+  it('turbulent air → "Too gusty"', () => {
+    expect(lim({ windSpeed: 11, gust: 21 })).toBe('Too gusty') // GF 1.9, gated
+  })
+  it('rain → "Rain likely"', () => {
+    expect(lim({ windSpeed: 16, gust: 18, precip: 1.2, precipProb: 80 })).toBe('Rain likely')
+  })
+  it('borderline-gusty (ungated) → "A bit gusty"', () => {
+    expect(lim({ windSpeed: 14, gust: 22 })).toBe('A bit gusty') // GF 1.57, not gated
+  })
+  it('is null-safe and pure for an already-scored result', () => {
+    const h = hour({ windSpeed: 16, gust: 18 })
+    expect(limiterFor(h, scoreHour(h))).toBeNull()
+  })
+})
+
 describe('scoreHour — known fixtures', () => {
-  it('12 mph steady dry → Excellent', () => {
-    const r = scoreHour(hour({ windSpeed: 12, gust: 14, precip: 0, precipProb: 0, temp: 72 }))
+  it('16 mph steady dry → Excellent', () => {
+    const r = scoreHour(hour({ windSpeed: 16, gust: 18, precip: 0, precipProb: 0, temp: 72 }))
     expect(r.label).toBe('Excellent')
     expect(r.score).toBeGreaterThanOrEqual(80)
+  })
+  it('light-but-clear day reads Good, not a lying Excellent', () => {
+    // Regression: 11 mph steady, smooth, dry, mild used to score 100 because
+    // gust+precip+temp maxed and wind was only 45% of the sum. Wind is now the
+    // ceiling, so the headline tracks the actual flyability.
+    const r = scoreHour(hour({ windSpeed: 11, gust: 13, precip: 0, precipProb: 0, temp: 72 }))
+    expect(r.label).toBe('Good')
+    expect(r.score).toBeLessThan(80)
+    expect(r.score).toBe(Math.round(r.parts.wind)) // capped by wind, not inflated by the calm day
+  })
+  it('a wind-capped score is still an integer', () => {
+    // 11.4 mph gives a fractional windScore; the ceiling must not leak the float.
+    const r = scoreHour(hour({ windSpeed: 11.4, gust: 11.4, precip: 0, precipProb: 0, temp: 77 }))
+    expect(Number.isInteger(r.score)).toBe(true)
   })
   it('dead calm → Poor', () => {
     const r = scoreHour(hour({ windSpeed: 1, gust: 2 }))
@@ -103,8 +163,8 @@ describe('scoreHour — known fixtures', () => {
   })
 
   // Steady wind vs gusts — the reliability fix.
-  it('steady ideal wind → Excellent, ungated', () => {
-    const r = scoreHour(hour({ windSpeed: 12, gust: 15 })) // spread 3, GF 1.25
+  it('steady reliable wind → Excellent, ungated', () => {
+    const r = scoreHour(hour({ windSpeed: 16, gust: 19 })) // spread 3, GF 1.19
     expect(r.label).toBe('Excellent')
     expect(r.gated).toBe(false)
   })

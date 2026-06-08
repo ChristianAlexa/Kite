@@ -16,12 +16,15 @@ export default function HeadlineCard({ windows, hours }) {
 
   if (next) {
     const c = labelColor(next.label)
+    // Caveat from the window's peak hour — explains a Good (not Excellent) window.
+    const peak = next.hours.find((h) => h.score === next.peakScore)
     return (
       <section className={`flex items-center gap-3 rounded-3xl p-4 ${c.soft}`}>
         <span className={`text-4xl font-black tabular-nums ${c.text}`}>{next.peakScore}</span>
         <div className="min-w-0">
           <div className={`text-[11px] font-bold uppercase tracking-wide ${c.text}`}>
             Next window
+            {peak?.limiter && <span className="text-slate-400"> · {peak.limiter}</span>}
           </div>
           <div className="text-sm font-semibold leading-snug text-slate-800">
             {formatWindowHeadline(next)}
@@ -37,7 +40,8 @@ export default function HeadlineCard({ windows, hours }) {
       <div className="text-sm font-semibold text-slate-700">No great kite windows this week.</div>
       {best && (
         <div className="mt-1 text-xs text-slate-500">
-          Best is {best.label} {format(new Date(best.time), 'EEE h a')} — score {best.score}.
+          Best is {best.label} {format(new Date(best.time), 'EEE h a')} — score {best.score}
+          {best.limiter ? ` (${best.limiter}).` : '.'}
         </div>
       )}
     </section>

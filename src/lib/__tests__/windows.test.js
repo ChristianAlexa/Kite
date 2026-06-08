@@ -13,8 +13,8 @@ import {
 // Build a normalized hour at a given local ISO time with chosen quality.
 const at = (iso, over = {}) => ({
   time: iso,
-  windSpeed: 12,
-  gust: 14,
+  windSpeed: 16,
+  gust: 18,
   precip: 0,
   precipProb: 0,
   temp: 70,
@@ -91,9 +91,9 @@ describe('nextGreatWindow', () => {
 
   it('picks the earliest upcoming Good+ window, not the highest-scoring', () => {
     const hours = scoreHours([
-      // Earlier, merely Good window
-      at('2026-06-02T09:00', { windSpeed: 20, gust: 24 }),
-      at('2026-06-02T10:00', { windSpeed: 20, gust: 24 }),
+      // Earlier, merely Good window (light, wind-capped)
+      at('2026-06-02T09:00', { windSpeed: 11, gust: 13 }),
+      at('2026-06-02T10:00', { windSpeed: 11, gust: 13 }),
       calm('2026-06-02T11:00'),
       // Later, Excellent window
       at('2026-06-04T15:00'),
@@ -161,8 +161,8 @@ describe('bestDaytimeHour', () => {
   it('returns the highest-scoring daytime hour', () => {
     const hours = scoreHours([
       calm('2026-06-02T09:00'),
-      at('2026-06-02T12:00', { windSpeed: 20, gust: 24 }), // Good-ish
-      at('2026-06-02T15:00'), // Excellent (12 mph steady)
+      at('2026-06-02T12:00', { windSpeed: 11, gust: 13 }), // Good (light, wind-capped)
+      at('2026-06-02T15:00'), // Excellent (16 mph steady)
     ])
     expect(bestDaytimeHour(hours).time).toBe('2026-06-02T15:00')
   })
