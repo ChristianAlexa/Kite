@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, format } from 'date-fns'
 import { fetchForecast } from './lib/weather.js'
+import { fetchNearestStations, fetchStationObservation } from './lib/station.js'
 import { scoreHours, detectWindows } from './lib/windows.js'
-import { getBrowserLocation, saveLocation, loadLocation, clearLocation } from './lib/location.js'
+import {
+  getBrowserLocation,
+  saveLocation,
+  loadLocation,
+  clearLocation,
+  saveStation,
+  loadStation,
+} from './lib/location.js'
 import LocationBar from './components/LocationBar.jsx'
+import LiveNowCard from './components/LiveNowCard.jsx'
 import HeadlineCard from './components/HeadlineCard.jsx'
 import WeekHeatmap from './components/WeekHeatmap.jsx'
 
@@ -24,6 +33,14 @@ export default function App() {
   const [geoBusy, setGeoBusy] = useState(false)
   const [fetchedAt, setFetchedAt] = useState(null)
   const reqIdRef = useRef(0) // guards against out-of-order/stale responses
+
+  // Live nearest-station observation — the measured anchor beside the forecast.
+  const [stations, setStations] = useState([])
+  const [stationId, setStationId] = useState(null)
+  const [liveObs, setLiveObs] = useState(null)
+  const [liveStatus, setLiveStatus] = useState('idle') // idle | loading | ready | error
+  const stationReqRef = useRef(0)
+  const obsReqRef = useRef(0)
 
   // On first mount: stored location → else try geolocation → else default.
   useEffect(() => {
@@ -68,6 +85,52 @@ export default function App() {
     refresh()
   }, [location, refresh])
 
+  // Resolve the nearest stations for the location, then pick the active one:
+  // a saved override if it's still nearby, otherwise the closest station.
+  useEffect(() => {
+    if (!location) return
+    const myId = ++stationReqRef.current
+    setLiveStatus('loading')
+    fetchNearestStations(location.latitude, location.longitude)
+      .then((list) => {
+        if (myId !== stationReqRef.current) return
+        setStations(list)
+        const saved = loadStation()
+        const pick = list.find((s) => s.id === saved)?.id ?? list[0]?.id ?? null
+        setStationId(pick)
+        if (!pick) setLiveStatus('error')
+      })
+      .catch(() => {
+        if (myId !== stationReqRef.current) return
+        setStations([])
+        setStationId(null)
+        setLiveStatus('error')
+      })
+  }, [location])
+
+  // Fetch the active station's latest observation. Reruns on manual override.
+  useEffect(() => {
+    if (!stationId) return
+    const myId = ++obsReqRef.current
+    setLiveStatus('loading')
+    fetchStationObservation(stationId)
+      .then((obs) => {
+        if (myId !== obsReqRef.current) return
+        setLiveObs(obs)
+        setLiveStatus('ready')
+      })
+      .catch(() => {
+        if (myId !== obsReqRef.current) return
+        setLiveStatus('error')
+      })
+  }, [stationId])
+
+  // User override from the LiveNowCard dropdown — persist and refetch.
+  const handlePickStation = useCallback((id) => {
+    saveStation(id)
+    setStationId(id)
+  }, [])
+
   // Re-render every minute so the "Updated Xm ago" label stays honest while idle.
   const [, setTick] = useState(0)
   useEffect(() => {
@@ -75,12 +138,16 @@ export default function App() {
     return () => clearInterval(id)
   }, [])
 
-  // Derive scored hours + windows once per forecast.
+  // Derive scored hours + windows once per forecast. forecastNow is the forecast
+  // hour aligned with the current local hour — the baseline the live reading is
+  // compared against (and the source of is-day for scoring the observation).
   const derived = useMemo(() => {
     if (!forecast) return null
     const scored = scoreHours(forecast.hours)
     const windows = detectWindows(scored)
-    return { scored, windows }
+    const nowKey = format(new Date(), "yyyy-MM-dd'T'HH")
+    const forecastNow = forecast.hours.find((h) => h.time.startsWith(nowKey)) ?? null
+    return { scored, windows, forecastNow }
   }, [forecast])
 
   const handleGeolocate = () => {
@@ -176,6 +243,14 @@ export default function App() {
                   </span>
                 </button>
               )}
+              <LiveNowCard
+                status={liveStatus}
+                obs={liveObs}
+                forecastNow={derived.forecastNow}
+                stations={stations}
+                stationId={stationId}
+                onPickStation={handlePickStation}
+              />
               <HeadlineCard windows={derived.windows} hours={derived.scored} />
               <WeekHeatmap hours={derived.scored} />
             </>
@@ -197,7 +272,7 @@ export default function App() {
               {status === 'loading' ? 'Refreshing…' : '↻ Refresh'}
             </button>
           </div>
-          <div>All times local · Daylight hours only · Data: Open-Meteo</div>
+          <div>All times local · Daylight hours only · Data: Open-Meteo · NWS</div>
         </footer>
       </div>
     </div>

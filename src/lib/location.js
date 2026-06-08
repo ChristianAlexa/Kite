@@ -1,6 +1,7 @@
 // Location helpers: browser geolocation + localStorage persistence.
 
 const STORAGE_KEY = 'kite.location'
+const STATION_KEY = 'kite.station'
 
 // getBrowserLocation() → Promise<{ latitude, longitude, label }>
 export function getBrowserLocation() {
@@ -59,5 +60,23 @@ export function clearLocation() {
     localStorage.removeItem(STORAGE_KEY)
   } catch {
     /* storage unavailable — non-fatal */
+  }
+}
+
+// Persist a manual station override (e.g. KIAD) so it survives reloads. Ignored
+// at load time when the saved id isn't among the new location's nearest stations.
+export function saveStation(id) {
+  try {
+    localStorage.setItem(STATION_KEY, id)
+  } catch {
+    /* storage unavailable — non-fatal */
+  }
+}
+
+export function loadStation() {
+  try {
+    return localStorage.getItem(STATION_KEY) || null
+  } catch {
+    return null
   }
 }

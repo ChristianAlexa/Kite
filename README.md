@@ -34,9 +34,10 @@ model in [`src/lib/scoring.js`](src/lib/scoring.js); design notes in
 ## Stack & privacy
 
 React + Vite + Tailwind. Weather from the free, keyless
-[Open-Meteo](https://open-meteo.com/) API, called straight from the browser. Last
-location is kept in `localStorage`; no accounts, no analytics, no tracking
-([PRIVACY.md](PRIVACY.md)).
+[Open-Meteo](https://open-meteo.com/) API, plus live station observations from
+the [U.S. National Weather Service](https://api.weather.gov/) — both called
+straight from the browser. Last location and station choice are kept in
+`localStorage`; no accounts, no analytics, no tracking ([PRIVACY.md](PRIVACY.md)).
 
 > `npm audit` shows moderate advisories in the dev-only Vite/esbuild toolchain —
 > not in the shipped bundle.
