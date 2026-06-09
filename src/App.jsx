@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { formatDistanceToNow, format } from 'date-fns'
 import { fetchForecast } from './lib/weather.js'
-import { fetchNearestStations, fetchStationObservation } from './lib/station.js'
+import { fetchNearestStations, fetchStationObservation, reverseGeocode } from './lib/station.js'
 import { scoreHours, detectWindows } from './lib/windows.js'
 import {
   getBrowserLocation,
@@ -18,9 +18,9 @@ import WeekHeatmap from './components/WeekHeatmap.jsx'
 
 // Fallback when there's no stored location and geolocation is unavailable/denied.
 const DEFAULT_LOCATION = {
-  latitude: 37.2296,
-  longitude: -80.4139,
-  label: 'Blacksburg, Virginia',
+  latitude: 38.9072,
+  longitude: -77.0369,
+  label: 'Washington, D.C.',
   source: 'default',
 }
 
@@ -42,19 +42,29 @@ export default function App() {
   const stationReqRef = useRef(0)
   const obsReqRef = useRef(0)
 
+  // Geolocate, then swap the placeholder label for the nearest named place so the
+  // header reads "Leesburg, VA" instead of "Current location". Label is resolved
+  // before setLocation so the lat/lon-keyed effects don't fire twice. Reverse
+  // geocode is best-effort — on failure we keep the generic label.
+  const resolveGeo = useCallback(async () => {
+    const loc = await getBrowserLocation()
+    const place = await reverseGeocode(loc.latitude, loc.longitude).catch(() => null)
+    return place ? { ...loc, label: place } : loc
+  }, [])
+
   // On first mount: stored location → else try geolocation → else default.
   useEffect(() => {
     if (location) return
     let cancelled = false
     setGeoBusy(true)
-    getBrowserLocation()
+    resolveGeo()
       .then((loc) => !cancelled && setLocation(loc))
       .catch(() => !cancelled && setLocation(DEFAULT_LOCATION))
       .finally(() => !cancelled && setGeoBusy(false))
     return () => {
       cancelled = true
     }
-  }, [location])
+  }, [location, resolveGeo])
 
   // Fetch the current location's forecast. Reused by the location effect, the
   // error-retry button, and the manual refresh control. A request id discards any
@@ -85,6 +95,26 @@ export default function App() {
     refresh()
   }, [location, refresh])
 
+  // Fetch a station's latest observation. Called explicitly (not via a stationId
+  // effect) so it always runs even when the picked station is unchanged — e.g.
+  // geolocating to the same place you already had resolves to the same station,
+  // which a [stationId] effect would skip, leaving liveStatus stuck on 'loading'.
+  const loadObservation = useCallback((id) => {
+    if (!id) return
+    const myId = ++obsReqRef.current
+    setLiveStatus('loading')
+    fetchStationObservation(id)
+      .then((obs) => {
+        if (myId !== obsReqRef.current) return
+        setLiveObs(obs)
+        setLiveStatus('ready')
+      })
+      .catch(() => {
+        if (myId !== obsReqRef.current) return
+        setLiveStatus('error')
+      })
+  }, [])
+
   // Resolve the nearest stations for the location, then pick the active one:
   // a saved override if it's still nearby, otherwise the closest station.
   useEffect(() => {
@@ -98,7 +128,8 @@ export default function App() {
         const saved = loadStation()
         const pick = list.find((s) => s.id === saved)?.id ?? list[0]?.id ?? null
         setStationId(pick)
-        if (!pick) setLiveStatus('error')
+        if (pick) loadObservation(pick)
+        else setLiveStatus('error')
       })
       .catch(() => {
         if (myId !== stationReqRef.current) return
@@ -106,30 +137,17 @@ export default function App() {
         setStationId(null)
         setLiveStatus('error')
       })
-  }, [location])
-
-  // Fetch the active station's latest observation. Reruns on manual override.
-  useEffect(() => {
-    if (!stationId) return
-    const myId = ++obsReqRef.current
-    setLiveStatus('loading')
-    fetchStationObservation(stationId)
-      .then((obs) => {
-        if (myId !== obsReqRef.current) return
-        setLiveObs(obs)
-        setLiveStatus('ready')
-      })
-      .catch(() => {
-        if (myId !== obsReqRef.current) return
-        setLiveStatus('error')
-      })
-  }, [stationId])
+  }, [location, loadObservation])
 
   // User override from the LiveNowCard dropdown — persist and refetch.
-  const handlePickStation = useCallback((id) => {
-    saveStation(id)
-    setStationId(id)
-  }, [])
+  const handlePickStation = useCallback(
+    (id) => {
+      saveStation(id)
+      setStationId(id)
+      loadObservation(id)
+    },
+    [loadObservation]
+  )
 
   // Re-render every minute so the "Updated Xm ago" label stays honest while idle.
   const [, setTick] = useState(0)
@@ -153,7 +171,7 @@ export default function App() {
   const handleGeolocate = () => {
     setGeoBusy(true)
     setGeoError(null)
-    getBrowserLocation()
+    resolveGeo()
       .then(setLocation)
       // Surface the failure inline without tearing down the current view (any
       // forecast already on screen stays). Distinct from the fetch-error card.

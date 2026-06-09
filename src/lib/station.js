@@ -47,6 +47,18 @@ export async function fetchNearestStations(lat, lon, limit = 5) {
   })
 }
 
+// reverseGeocode(lat, lon) → "City, ST" | null. Uses the relativeLocation NWS
+// already attaches to /points (nearest named place), so geolocated coords get a
+// human label in the header instead of a bare "Current location". Best-effort:
+// returns null on any failure so the caller can fall back gracefully.
+export async function reverseGeocode(lat, lon) {
+  const res = await fetch(`${NWS}/points/${lat},${lon}`)
+  if (!res.ok) return null
+  const rel = (await res.json()).properties?.relativeLocation?.properties
+  if (!rel?.city) return null
+  return rel.state ? `${rel.city}, ${rel.state}` : rel.city
+}
+
 // fetchStationObservation(id) → normalized current reading in app units (mph/°F/mm).
 // gust is null in the feed when calm — fall back to windSpeed so steadiness reads
 // smooth instead of dividing by a missing value downstream.
